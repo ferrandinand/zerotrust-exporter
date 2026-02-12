@@ -22,6 +22,8 @@ type User struct {
 
 // fetchAllUsers fetches all users from Cloudflare API
 func fetchAllUsers(ctx context.Context) (map[string]*cloudflare.AccessUser, error) {
+	log.Printf("Fetching users from Cloudflare API...")
+
 	rc := &cloudflare.ResourceContainer{Level: cloudflare.AccountRouteLevel, Identifier: config.AccountID}
 	startTime := time.Now()
 	usersList, _, err := config.Client.ListAccessUsers(ctx, rc, cloudflare.AccessUserParams{})
@@ -52,7 +54,6 @@ func CollectUserMetrics(deviceMetrics map[string]devices.DeviceStatus) {
 	if err != nil {
 		log.Printf("Error fetching users: %v", err)
 		appmetrics.IncApiErrorsCounter()
-		appmetrics.SetUpMetric(0)
 		return
 	}
 

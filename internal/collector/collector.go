@@ -56,6 +56,10 @@ func MetricsHandler(w http.ResponseWriter, req *http.Request) {
 	go func() {
 		defer wg.Done()
 		if config.EnableUsers {
+			if config.EnableTunnels {
+				log.Println("Collecting tunnel metrics...")
+				tunnels.CollectTunnelMetrics()
+			}
 			log.Println("Waiting for device metrics...")
 			deviceMetrics, ok := <-deviceMetricsChan
 			if ok {

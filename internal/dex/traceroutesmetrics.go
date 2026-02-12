@@ -101,7 +101,6 @@ func fetchTestDetails(ctx context.Context, accountID string, testID string, wg *
 		if err != nil {
 			log.Printf("Error fetching traceroute test %s: %v", testID, err)
 			appmetrics.IncApiErrorsCounter()
-			appmetrics.SetUpMetric(0)
 			time.Sleep(time.Second * time.Duration(attempt*attempt)) // Exponential backoff
 			continue
 		}
@@ -116,7 +115,6 @@ func fetchTestDetails(ctx context.Context, accountID string, testID string, wg *
 		if resp.StatusCode != http.StatusOK {
 			log.Printf("Error fetching traceroute test %s: %s", testID, resp.Status)
 			appmetrics.IncApiErrorsCounter()
-			appmetrics.SetUpMetric(0)
 			return
 		}
 
@@ -124,7 +122,6 @@ func fetchTestDetails(ctx context.Context, accountID string, testID string, wg *
 		if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 			log.Printf("Error decoding response for test %s: %v", testID, err)
 			appmetrics.IncApiErrorsCounter()
-			appmetrics.SetUpMetric(0)
 			return
 		}
 

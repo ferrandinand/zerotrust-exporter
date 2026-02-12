@@ -125,7 +125,6 @@ func CollectDexTests(ctx context.Context, accountID string) (map[string]DexTests
 		if err != nil {
 			log.Printf("Error fetching dex tests: %v", err)
 			appmetrics.IncApiErrorsCounter()
-			appmetrics.SetUpMetric(0)
 			return nil, err
 		}
 		defer resp.Body.Close()
@@ -133,7 +132,6 @@ func CollectDexTests(ctx context.Context, accountID string) (map[string]DexTests
 		if resp.StatusCode != http.StatusOK {
 			log.Printf("Error fetching dex tests: %s", resp.Status)
 			appmetrics.IncApiErrorsCounter()
-			appmetrics.SetUpMetric(0)
 			return nil, fmt.Errorf("error fetching dex tests: %s", resp.Status)
 		}
 
@@ -141,7 +139,6 @@ func CollectDexTests(ctx context.Context, accountID string) (map[string]DexTests
 		if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 			log.Printf("Error decoding response: %v", err)
 			appmetrics.IncApiErrorsCounter()
-			appmetrics.SetUpMetric(0)
 			return nil, err
 		}
 
@@ -208,7 +205,6 @@ func CollectDexMetrics(ctx context.Context, accountID string) {
 	if err != nil {
 		log.Printf("Error collecting dex metrics: %v", err)
 		appmetrics.IncApiErrorsCounter()
-		appmetrics.SetUpMetric(0)
 		return
 	}
 

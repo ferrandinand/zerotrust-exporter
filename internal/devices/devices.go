@@ -14,41 +14,50 @@ import (
 	"github.com/vinistoisr/zerotrust-exporter/internal/config"
 )
 
+// PhysicalDevice represents a physical device from the Cloudflare API
+type PhysicalDevice struct {
+	ID                  string    `json:"id"`
+	Name                string    `json:"name"`
+	DeviceType          string    `json:"device_type"`
+	Model               string    `json:"model"`
+	OSVersion           string    `json:"os_version"`
+	SerialNumber        string    `json:"serial_number"`
+	MacAddress          string    `json:"mac_address"`
+	ClientVersion       string    `json:"client_version"`
+	PublicIP            string    `json:"public_ip"`
+	ActiveRegistrations int       `json:"active_registrations"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+	LastSeenAt          time.Time `json:"last_seen_at"`
+	LastSeenUser        struct {
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	} `json:"last_seen_user"`
+}
+
+// DeviceStatus is a simplified struct for internal use
 type DeviceStatus struct {
-	Colo        string `json:"colo"`
-	Mode        string `json:"mode"`
-	Status      string `json:"status"`
-	Platform    string `json:"platform"`
-	Version     string `json:"version"`
-	Timestamp   string `json:"timestamp"`
-	DeviceName  string `json:"deviceName"`
-	DeviceID    string `json:"deviceId"`
-	PersonEmail string `json:"personEmail"`
+	DeviceID    string
+	DeviceName  string
+	DeviceType  string
+	OSVersion   string
+	Version     string
+	PersonEmail string
+	PublicIP    string
 }
 
 func fetchDeviceStatus(ctx context.Context, accountID string) (map[string]DeviceStatus, error) {
-	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/dex/fleet-status/devices", accountID)
+	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/devices/physical-devices", accountID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		log.Printf("Error creating request: %v", err)
 		appmetrics.IncApiErrorsCounter()
-		appmetrics.SetUpMetric(0)
 		return nil, err
 	}
 	// add authorization headers
 	req.Header.Set("Authorization", "Bearer "+config.ApiKey)
 	req.Header.Set("Content-Type", "application/json")
-	// define query parameters
-	q := req.URL.Query()
-	q.Add("per_page", "50")
-	q.Add("page", "1")
-	q.Add("time_end", time.Unix(time.Now().Unix(), 0).Format(time.RFC3339))
-	q.Add("time_start", time.Unix(time.Now().Add(-time.Minute*10).Unix(), 0).Format(time.RFC3339))
-	q.Add("sort_by", "device_id")
-	q.Add("status", "connected")
-	q.Add("source", "last_seen")
-	// add query parameters to the request
-	req.URL.RawQuery = q.Encode()
 	// send the request
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -66,7 +75,7 @@ func fetchDeviceStatus(ctx context.Context, accountID string) (map[string]Device
 	}
 	// parse the response body into a struct
 	var response struct {
-		Result []DeviceStatus `json:"result"`
+		Result []PhysicalDevice `json:"result"`
 	}
 	// decode the response body
 	err = json.NewDecoder(resp.Body).Decode(&response)
@@ -75,8 +84,16 @@ func fetchDeviceStatus(ctx context.Context, accountID string) (map[string]Device
 	}
 
 	deviceStatuses := make(map[string]DeviceStatus)
-	for _, deviceStatus := range response.Result {
-		deviceStatuses[deviceStatus.DeviceID] = deviceStatus
+	for _, device := range response.Result {
+		deviceStatuses[device.ID] = DeviceStatus{
+			DeviceID:    device.ID,
+			DeviceName:  device.Name,
+			DeviceType:  device.DeviceType,
+			OSVersion:   device.OSVersion,
+			Version:     device.ClientVersion,
+			PersonEmail: device.LastSeenUser.Email,
+			PublicIP:    device.PublicIP,
+		}
 	}
 
 	return deviceStatuses, nil
@@ -91,7 +108,6 @@ func CollectDeviceMetrics() map[string]DeviceStatus {
 	if err != nil {
 		log.Printf("Error fetching device status: %v", err)
 		appmetrics.IncApiErrorsCounter()
-		appmetrics.SetUpMetric(0)
 		return nil
 	}
 
@@ -99,19 +115,14 @@ func CollectDeviceMetrics() map[string]DeviceStatus {
 		log.Printf("Fetched %d devices in %v", len(deviceStatuses), time.Since(startTime))
 	}
 
-	filteredDevices := make(map[string]DeviceStatus)
-	for _, status := range deviceStatuses {
-		if status.Status == "connected" {
-			filteredDevices[status.DeviceID] = status
-		}
-	}
-
-	for deviceID, status := range filteredDevices {
-		metricName := fmt.Sprintf(`zerotrust_devices_up{device_id="%s", device_name="%s", user_email="%s", colo="%s", mode="%s", platform="%s", version="%s"}`, deviceID, status.DeviceName, status.PersonEmail, status.Colo, status.Mode, status.Platform, status.Version)
+	// All devices from the physical-devices endpoint are considered active
+	for deviceID, status := range deviceStatuses {
+		metricName := fmt.Sprintf(`zerotrust_devices_up{device_id="%s", device_name="%s", user_email="%s", device_type="%s", os_version="%s", version="%s", public_ip="%s"}`,
+			deviceID, status.DeviceName, status.PersonEmail, status.DeviceType, status.OSVersion, status.Version, status.PublicIP)
 		gauge := metrics.GetOrCreateGauge(metricName, nil)
 		gauge.Set(1)
 	}
 
 	log.Println("Device metrics collection completed.")
-	return filteredDevices
+	return deviceStatuses
 }

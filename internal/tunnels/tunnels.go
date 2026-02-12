@@ -24,7 +24,6 @@ func CollectTunnelMetrics() {
 	if err != nil {
 		log.Printf("Error fetching tunnels: %v", err)
 		appmetrics.IncApiErrorsCounter()
-		appmetrics.SetUpMetric(0)
 		return
 	}
 
